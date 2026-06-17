@@ -84,7 +84,7 @@ async function ensureReady(pool: import("pg").Pool): Promise<void> {
         [
           randomUUID(),
           "jpalacios@smartbeemo.com",
-          "Juan Pablo Palacios",
+          "Jessica Palacios",
           "admin",
           hashPassword("Smartbeemo2026"),
           true,

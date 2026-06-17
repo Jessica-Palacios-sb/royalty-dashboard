@@ -48,7 +48,7 @@ try {
       [
         randomUUID(),
         email,
-        "Juan Pablo Palacios",
+        "Jessica Palacios",
         "admin",
         hashPassword("Smartbeemo2026"),
         true,

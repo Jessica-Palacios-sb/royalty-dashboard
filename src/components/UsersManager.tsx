@@ -78,6 +78,13 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
     load();
   }
 
+  async function editName(u: PublicUser) {
+    const nuevo = prompt("Nuevo nombre:", u.name);
+    if (!nuevo || !nuevo.trim() || nuevo.trim() === u.name) return;
+    await patchUser(u.id, { name: nuevo.trim() });
+    notify("ok", "Nombre actualizado.");
+  }
+
   async function resetPassword(id: string) {
     const temp = prompt("Nueva contraseña temporal (mín. 8 caracteres):");
     if (!temp) return;
@@ -277,6 +284,12 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2 text-xs">
+                      <button
+                        onClick={() => editName(u)}
+                        className="text-slate-600 hover:text-slate-900 underline"
+                      >
+                        Editar nombre
+                      </button>
                       <button
                         onClick={() => resetPassword(u.id)}
                         className="text-slate-600 hover:text-slate-900 underline"

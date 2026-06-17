@@ -59,6 +59,7 @@ export interface DashboardRow {
   pctClases: number; // participación dentro del segmento (0-100)
   pctVideos: number;
   pctBootcamp: number;
+  pctTotal: number; // suma de las tres participaciones
   comision: number; // USD asignados a este mentor
 }
 
@@ -67,6 +68,7 @@ export interface DashboardTotals {
   clasesEnVivo: number;
   videos: number;
   bootcamp: number;
+  pctTotal: number; // suma de las participaciones totales de los mentores
   comision: number;
 }
 

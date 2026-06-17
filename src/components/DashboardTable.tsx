@@ -75,6 +75,7 @@ export default function DashboardTable() {
               <th className="px-4 py-3 font-semibold text-right">% Videos</th>
               <th className="px-4 py-3 font-semibold text-right">Bootcamp</th>
               <th className="px-4 py-3 font-semibold text-right">% Bootcamp</th>
+              <th className="px-4 py-3 font-semibold text-right">% Participación total</th>
               <th className="px-4 py-3 font-semibold text-right">Comisión</th>
             </tr>
           </thead>
@@ -92,6 +93,9 @@ export default function DashboardTable() {
                 <td className="px-4 py-2.5 text-right text-slate-500">{fmtPct(r.pctVideos)}</td>
                 <td className="px-4 py-2.5 text-right">{fmtInt(r.bootcamp)}</td>
                 <td className="px-4 py-2.5 text-right text-slate-500">{fmtPct(r.pctBootcamp)}</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-slate-700">
+                  {fmtPct(r.pctTotal)}
+                </td>
                 <td className="px-4 py-2.5 text-right font-semibold text-slate-900">
                   {fmtUSD(r.comision)}
                 </td>
@@ -108,6 +112,7 @@ export default function DashboardTable() {
               <td className="px-4 py-3 text-right">{t.videos > 0 ? "100,00 %" : "0,00 %"}</td>
               <td className="px-4 py-3 text-right">{fmtInt(t.bootcamp)}</td>
               <td className="px-4 py-3 text-right">{t.bootcamp > 0 ? "100,00 %" : "0,00 %"}</td>
+              <td className="px-4 py-3 text-right">{fmtPct(t.pctTotal)}</td>
               <td className="px-4 py-3 text-right">{fmtUSD(t.comision)}</td>
             </tr>
           </tfoot>

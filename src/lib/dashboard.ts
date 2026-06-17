@@ -101,15 +101,20 @@ export function buildDashboard(
       pctClases,
       pctVideos,
       pctBootcamp,
+      pctTotal: pctClases + pctVideos + pctBootcamp,
       comision: config.comisionTotal * factor,
     };
   });
+
+  // Ordenar por la suma de participaciones, de mayor a menor.
+  rows.sort((a, b) => b.pctTotal - a.pctTotal);
 
   const totals: DashboardTotals = {
     chargebacks: aplicables.reduce((s, m) => s + m.chargebacks, 0),
     clasesEnVivo: totClases,
     videos: totVideos,
     bootcamp: totBootcamp,
+    pctTotal: rows.reduce((s, r) => s + r.pctTotal, 0),
     comision: rows.reduce((s, r) => s + r.comision, 0),
   };
 

@@ -66,6 +66,9 @@ create table if not exists settings (
 );
 `;
 
+// Admin principal: siempre activo y con rol admin (no se puede bloquear ni borrar).
+export const PRIMARY_ADMIN_EMAIL = "jpalacios@smartbeemo.com";
+
 // Garantiza esquema + admin inicial una sola vez por instancia (idempotente).
 let _ready: Promise<void> | null = null;
 
@@ -83,7 +86,7 @@ async function ensureReady(pool: import("pg").Pool): Promise<void> {
          on conflict (email) do nothing`,
         [
           randomUUID(),
-          "jpalacios@smartbeemo.com",
+          PRIMARY_ADMIN_EMAIL,
           "Jessica Palacios",
           "admin",
           hashPassword("Smartbeemo2026"),
@@ -93,6 +96,12 @@ async function ensureReady(pool: import("pg").Pool): Promise<void> {
         ]
       );
     }
+    // Salvaguarda: el admin principal nunca queda inactivo ni sin rol admin.
+    await pool.query(
+      `update users set active = true, role = 'admin'
+         where lower(email) = lower($1) and (active = false or role <> 'admin')`,
+      [PRIMARY_ADMIN_EMAIL]
+    );
   })().catch((err) => {
     // Si falla, permitir reintento en la próxima llamada.
     _ready = null;

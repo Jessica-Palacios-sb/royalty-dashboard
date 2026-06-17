@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
-import { deleteUser, updateUser } from "@/lib/store";
+import { deleteUser, updateUser, findUserById, PRIMARY_ADMIN_EMAIL } from "@/lib/store";
 import { PageKey, Role } from "@/lib/types";
 
 /** PATCH -> actualiza rol, permisos de páginas o estado activo (solo admin). */
@@ -19,6 +19,23 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       (p: string): p is PageKey => p === "dashboard" || p === "admin"
     );
   }
+
+  // Protecciones: nadie se puede desactivar a sí mismo, y el admin principal
+  // siempre queda activo y con rol admin (no se puede editar ni borrar).
+  const target = await findUserById(params.id);
+  const isPrimaryAdmin =
+    !!target && target.email.toLowerCase() === PRIMARY_ADMIN_EMAIL.toLowerCase();
+  if (isPrimaryAdmin) {
+    delete patch.active;
+    delete patch.role;
+  }
+  if (me.id === params.id && patch.active === false) {
+    return NextResponse.json(
+      { error: "No puedes desactivar tu propio usuario" },
+      { status: 400 }
+    );
+  }
+
   try {
     const user = await updateUser(params.id, patch);
     const { passwordHash, ...rest } = user;
@@ -35,6 +52,13 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   if (me.role !== "admin") return NextResponse.json({ error: "Solo administradores" }, { status: 403 });
   if (me.id === params.id) {
     return NextResponse.json({ error: "No puedes eliminar tu propio usuario" }, { status: 400 });
+  }
+  const target = await findUserById(params.id);
+  if (target && target.email.toLowerCase() === PRIMARY_ADMIN_EMAIL.toLowerCase()) {
+    return NextResponse.json(
+      { error: "No se puede eliminar al administrador principal" },
+      { status: 400 }
+    );
   }
   await deleteUser(params.id);
   return NextResponse.json({ ok: true });

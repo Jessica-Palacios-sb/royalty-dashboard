@@ -19,6 +19,9 @@ const ALL_PAGES: { key: PageKey; label: string }[] = [
   { key: "admin", label: "Administración" },
 ];
 
+// Admin principal: su acceso no se puede desactivar ni quitar (siempre activo).
+const PRIMARY_ADMIN_EMAIL = "jpalacios@smartbeemo.com";
+
 export default function UsersManager({ currentUserId }: { currentUserId: string }) {
   const [users, setUsers] = useState<PublicUser[]>([]);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -234,10 +237,19 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {users.map((u) => {
+                const locked = u.email.toLowerCase() === PRIMARY_ADMIN_EMAIL;
+                return (
                 <tr key={u.id} className="border-t border-slate-100 align-top">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-slate-800">{u.name}</div>
+                    <div className="font-medium text-slate-800">
+                      {u.name}
+                      {locked && (
+                        <span className="ml-2 text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
+                          Admin principal
+                        </span>
+                      )}
+                    </div>
                     <div className="text-slate-500 text-xs">{u.email}</div>
                     {u.mustChangePassword && (
                       <span className="inline-block mt-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
@@ -246,14 +258,18 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <select
-                      value={u.role}
-                      onChange={(e) => patchUser(u.id, { role: e.target.value as Role })}
-                      className="border border-slate-300 rounded-md px-2 py-1 bg-white text-sm"
-                    >
-                      <option value="viewer">Visualizador</option>
-                      <option value="admin">Administrador</option>
-                    </select>
+                    {locked ? (
+                      <span className="text-sm text-slate-600">Administrador</span>
+                    ) : (
+                      <select
+                        value={u.role}
+                        onChange={(e) => patchUser(u.id, { role: e.target.value as Role })}
+                        className="border border-slate-300 rounded-md px-2 py-1 bg-white text-sm"
+                      >
+                        <option value="viewer">Visualizador</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1">
@@ -271,16 +287,25 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => patchUser(u.id, { active: !u.active })}
-                      className={`text-xs rounded-full px-2.5 py-1 ${
-                        u.active
-                          ? "bg-green-50 text-green-700 border border-green-200"
-                          : "bg-slate-100 text-slate-500 border border-slate-200"
-                      }`}
-                    >
-                      {u.active ? "Activo" : "Inactivo"}
-                    </button>
+                    {locked ? (
+                      <span
+                        title="El administrador principal siempre está activo"
+                        className="inline-block text-xs rounded-full px-2.5 py-1 bg-green-50 text-green-700 border border-green-200"
+                      >
+                        Activo
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => patchUser(u.id, { active: !u.active })}
+                        className={`text-xs rounded-full px-2.5 py-1 ${
+                          u.active
+                            ? "bg-green-50 text-green-700 border border-green-200"
+                            : "bg-slate-100 text-slate-500 border border-slate-200"
+                        }`}
+                      >
+                        {u.active ? "Activo" : "Inactivo"}
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2 text-xs">
@@ -296,7 +321,7 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
                       >
                         Restablecer clave
                       </button>
-                      {u.id !== currentUserId && (
+                      {u.id !== currentUserId && !locked && (
                         <button
                           onClick={() => removeUser(u.id)}
                           className="text-red-600 hover:text-red-800 underline"
@@ -307,7 +332,8 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -87,10 +87,10 @@ export function buildDashboard(
     const pctClases = pct(m.clasesEnVivo, totClases);
     const pctVideos = pct(m.videos, totVideos);
     const pctBootcamp = pct(m.bootcamp, totBootcamp);
-    const factor =
-      wClases * (pctClases / 100) +
-      wVideos * (pctVideos / 100) +
-      wBootcamp * (pctBootcamp / 100);
+    // Participación ponderada por los pesos del mes (0-100): es la porción de la
+    // comisión de este mentor. Ej.: 40%×%clases + 40%×%videos + 20%×%bootcamp.
+    const pctTotal =
+      wClases * pctClases + wVideos * pctVideos + wBootcamp * pctBootcamp;
     return {
       idMentor: m.idMentor,
       nombreMentor: m.nombreMentor,
@@ -101,12 +101,12 @@ export function buildDashboard(
       pctClases,
       pctVideos,
       pctBootcamp,
-      pctTotal: pctClases + pctVideos + pctBootcamp,
-      comision: config.comisionTotal * factor,
+      pctTotal,
+      comision: config.comisionTotal * (pctTotal / 100),
     };
   });
 
-  // Ordenar por la suma de participaciones, de mayor a menor.
+  // Ordenar por la participación ponderada, de mayor a menor.
   rows.sort((a, b) => b.pctTotal - a.pctTotal);
 
   const totals: DashboardTotals = {

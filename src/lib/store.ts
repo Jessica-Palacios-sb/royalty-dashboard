@@ -10,7 +10,10 @@ import { hashPassword } from "./password";
  * que consumen session.ts, dashboard.ts y las rutas API.
  *
  * La conexión usa POSTGRES_URL, la variable que inyecta la integración de
- * Vercel Postgres. El esquema vive en schema.sql y se aplica con `npm run db:setup`.
+ * Vercel Postgres. El esquema se aplica automáticamente la primera vez que se
+ * usa la base (ver ensureReady), de modo que no hace falta un paso manual de
+ * migración en Vercel. La copia en schema.sql se mantiene para `npm run db:setup`
+ * (uso local) y debe permanecer sincronizada con SCHEMA_SQL.
  */
 
 let _pool: import("pg").Pool | null = null;
@@ -32,6 +35,77 @@ async function getPool(): Promise<import("pg").Pool> {
     idleTimeoutMillis: 30_000,
   });
   return _pool;
+}
+
+/**
+ * Esquema en línea (espejo de schema.sql) para poder crearlo en tiempo de
+ * ejecución sin depender de leer un archivo del disco, que en el bundle
+ * serverless de Vercel no siempre está disponible.
+ */
+const SCHEMA_SQL = `
+create table if not exists users (
+  id                    uuid primary key,
+  email                 text not null unique,
+  name                  text not null,
+  role                  text not null,
+  password_hash         text not null,
+  must_change_password  boolean not null default true,
+  allowed_pages         text[] not null default '{}',
+  active                boolean not null default true,
+  created_at            timestamptz not null default now()
+);
+create unique index if not exists users_email_lower_idx on users (lower(email));
+create table if not exists month_configs (
+  mes             text primary key,
+  pesos           jsonb not null,
+  comision_total  numeric not null default 0
+);
+create table if not exists settings (
+  key    text primary key,
+  value  jsonb not null
+);
+`;
+
+// Garantiza esquema + admin inicial una sola vez por instancia (idempotente).
+let _ready: Promise<void> | null = null;
+
+async function ensureReady(pool: import("pg").Pool): Promise<void> {
+  if (_ready) return _ready;
+  _ready = (async () => {
+    await pool.query(SCHEMA_SQL);
+    const count = await pool.query("select count(*)::int as n from users");
+    if (count.rows[0].n === 0) {
+      // Admin inicial. ON CONFLICT evita duplicados ante arranques concurrentes.
+      await pool.query(
+        `insert into users
+           (id, email, name, role, password_hash, must_change_password, allowed_pages, active, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8, now())
+         on conflict (email) do nothing`,
+        [
+          randomUUID(),
+          "jpalacios@smartbeemo.com",
+          "Juan Pablo Palacios",
+          "admin",
+          hashPassword("Smartbeemo2026"),
+          true,
+          ["dashboard", "admin"],
+          true,
+        ]
+      );
+    }
+  })().catch((err) => {
+    // Si falla, permitir reintento en la próxima llamada.
+    _ready = null;
+    throw err;
+  });
+  return _ready;
+}
+
+/** Pool listo para usar: conexión + esquema/seed garantizados. */
+async function db(): Promise<import("pg").Pool> {
+  const pool = await getPool();
+  await ensureReady(pool);
+  return pool;
 }
 
 // Pesos por defecto solicitados: clases 40 / videos 40 / bootcamp 20.
@@ -59,13 +133,13 @@ function rowToUser(r: any): User {
 // ---- Usuarios ----
 
 export async function getUsers(): Promise<User[]> {
-  const pool = await getPool();
+  const pool = await db();
   const res = await pool.query("select * from users order by created_at asc");
   return res.rows.map(rowToUser);
 }
 
 export async function findUserByEmail(email: string): Promise<User | undefined> {
-  const pool = await getPool();
+  const pool = await db();
   const res = await pool.query(
     "select * from users where lower(email) = lower($1) limit 1",
     [email]
@@ -74,7 +148,7 @@ export async function findUserByEmail(email: string): Promise<User | undefined> 
 }
 
 export async function findUserById(id: string): Promise<User | undefined> {
-  const pool = await getPool();
+  const pool = await db();
   const res = await pool.query("select * from users where id = $1 limit 1", [id]);
   return res.rows[0] ? rowToUser(res.rows[0]) : undefined;
 }
@@ -86,7 +160,7 @@ export async function createUser(input: {
   allowedPages: User["allowedPages"];
   tempPassword: string;
 }): Promise<User> {
-  const pool = await getPool();
+  const pool = await db();
   const existing = await findUserByEmail(input.email);
   if (existing) {
     throw new Error("Ya existe un usuario con ese correo");
@@ -130,7 +204,7 @@ export async function updateUser(
     >
   >
 ): Promise<User> {
-  const pool = await getPool();
+  const pool = await db();
   const columns: Record<string, string> = {
     name: "name",
     role: "role",
@@ -162,7 +236,7 @@ export async function updateUser(
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  const pool = await getPool();
+  const pool = await db();
   await pool.query("delete from users where id = $1", [id]);
 }
 
@@ -170,7 +244,7 @@ export async function deleteUser(id: string): Promise<void> {
 
 /** Lista de IDs de mentores que aplican al reparto (global, no cambia por mes). */
 export async function getGlobalMentores(): Promise<string[]> {
-  const pool = await getPool();
+  const pool = await db();
   const res = await pool.query("select value from settings where key = $1", [
     MENTORES_KEY,
   ]);
@@ -179,7 +253,7 @@ export async function getGlobalMentores(): Promise<string[]> {
 }
 
 async function setGlobalMentores(ids: string[]): Promise<void> {
-  const pool = await getPool();
+  const pool = await db();
   await pool.query(
     `insert into settings (key, value) values ($1, $2::jsonb)
        on conflict (key) do update set value = excluded.value`,
@@ -190,7 +264,7 @@ async function setGlobalMentores(ids: string[]): Promise<void> {
 // ---- Configuración por mes ----
 
 export async function getMonthConfig(mes: string): Promise<MonthConfig | undefined> {
-  const pool = await getPool();
+  const pool = await db();
   const res = await pool.query(
     "select mes, pesos, comision_total from month_configs where mes = $1",
     [mes]
@@ -207,7 +281,7 @@ export async function getMonthConfig(mes: string): Promise<MonthConfig | undefin
 }
 
 export async function upsertMonthConfig(config: MonthConfig): Promise<MonthConfig> {
-  const pool = await getPool();
+  const pool = await db();
   await pool.query(
     `insert into month_configs (mes, pesos, comision_total)
        values ($1, $2::jsonb, $3)
@@ -218,29 +292,4 @@ export async function upsertMonthConfig(config: MonthConfig): Promise<MonthConfi
   // La selección de mentores es global: se guarda una sola vez para todos los meses.
   await setGlobalMentores(config.mentoresAplican);
   return config;
-}
-
-/** Aplica el esquema (schema.sql) y siembra el admin inicial si no hay usuarios. */
-export async function setupDatabase(): Promise<void> {
-  const { promises: fs } = await import("fs");
-  const path = await import("path");
-  const pool = await getPool();
-  const schema = await fs.readFile(
-    path.join(process.cwd(), "src", "lib", "schema.sql"),
-    "utf-8"
-  );
-  await pool.query(schema);
-
-  const count = await pool.query("select count(*)::int as n from users");
-  if (count.rows[0].n === 0) {
-    await createUser({
-      email: "jpalacios@smartbeemo.com",
-      name: "Juan Pablo Palacios",
-      role: "admin",
-      allowedPages: ["dashboard", "admin"],
-      // Contraseña temporal inicial: Smartbeemo2026 (se obliga a cambiarla).
-      tempPassword: "Smartbeemo2026",
-    });
-    // El admin sembrado queda como rol admin (createUser fija role).
-  }
 }

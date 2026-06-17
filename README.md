@@ -59,13 +59,15 @@ Usuarios y configuración se guardan en Postgres a través de
 - `settings`: ajustes globales; aquí se guardan los **mentores que aplican**
   (la selección es global, no cambia por mes).
 
-Para crear las tablas y sembrar el admin inicial:
+Las tablas y el admin inicial se crean **automáticamente** la primera vez que la app usa
+la base (ver `ensureReady` en [`src/lib/store.ts`](src/lib/store.ts)), por lo que en Vercel
+no hace falta ningún paso manual de migración. Todo es idempotente.
+
+Para inicializar manualmente en local (opcional) hay un script equivalente:
 
 ```bash
 node --env-file=.env.local scripts/db-setup.mjs   # o: npm run db:setup (con POSTGRES_URL en el entorno)
 ```
-
-Es idempotente: el esquema usa `if not exists` y el admin solo se crea si no hay usuarios.
 
 ## Despliegue en Vercel
 
@@ -74,9 +76,5 @@ Es idempotente: el esquema usa `if not exists` y el admin solo se crea si no hay
 3. Añadir la integración **Vercel Postgres** (inyecta `POSTGRES_URL` automáticamente).
 4. Configurar las variables de entorno: `SESSION_SECRET`, `DATA_SOURCE=redshift`,
    `REDSHIFT_*`, `DASHBOARD_CACHE_MINUTES`.
-5. Inicializar la base de datos una vez (esquema + admin):
-   ```bash
-   vercel env pull .env.production.local
-   node --env-file=.env.production.local scripts/db-setup.mjs
-   ```
+5. Desplegar. La base se inicializa sola en el primer arranque (esquema + admin).
 6. Asegurar que el cluster Redshift acepta conexiones desde el egress de Vercel.

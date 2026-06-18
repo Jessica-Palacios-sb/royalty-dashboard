@@ -140,7 +140,8 @@ function prevMonthKey(): string {
 
 /**
  * Refresca el snapshot desde Redshift (lo invoca el cron diario): vuelve a
- * consultar la lista de meses y el mes actual + el anterior, y los guarda.
+ * consultar la lista de meses y precarga TODOS los meses disponibles, para que
+ * el dashboard y la configuración carguen al instante en cualquier mes.
  */
 export async function refreshRedshiftCache(): Promise<{ refreshed: string[] }> {
   const { setRedshiftCache } = await import("./store");
@@ -154,8 +155,9 @@ export async function refreshRedshiftCache(): Promise<{ refreshed: string[] }> {
   await setRedshiftCache("months", months);
   refreshed.push("months");
 
-  // Mes actual y anterior (los que cambian)
-  for (const mes of [currentMonthKey(), prevMonthKey()]) {
+  // Precargar el mes actual aunque aún no tenga datos, + todos los meses con datos.
+  const objetivo = Array.from(new Set([currentMonthKey(), prevMonthKey(), ...months]));
+  for (const mes of objetivo) {
     const rows = await fetchMetricsLive(mes);
     await setRedshiftCache(`metrics:${mes}`, rows);
     refreshed.push(mes);

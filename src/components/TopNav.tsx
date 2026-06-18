@@ -38,10 +38,10 @@ export default function TopNav({ name, role, allowedPages }: Props) {
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <span className="bg-brand text-slate-900 font-bold px-2.5 py-1 rounded-md text-sm">
-            ROYALTIES
+            MENTORES
           </span>
           <nav className="flex items-center gap-1">
-            {allowedPages.includes("dashboard") && link("/dashboard", "Dashboard")}
+            {allowedPages.includes("dashboard") && link("/dashboard", "Royalty")}
             {role === "admin" && allowedPages.includes("admin") && link("/admin", "Administración")}
           </nav>
         </div>

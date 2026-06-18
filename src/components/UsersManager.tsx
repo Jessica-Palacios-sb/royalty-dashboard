@@ -15,7 +15,7 @@ interface PublicUser {
 }
 
 const ALL_PAGES: { key: PageKey; label: string }[] = [
-  { key: "dashboard", label: "Dashboard" },
+  { key: "dashboard", label: "Royalty" },
   { key: "admin", label: "Administración" },
 ];
 

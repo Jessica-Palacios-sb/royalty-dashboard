@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Panel de Royalties — Mentores",
-  description: "Dashboard de comisiones de mentores (royalty)",
+  title: "Mentores — Royalty",
+  description: "Panel de mentores. Royalty: comisiones por mentor.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

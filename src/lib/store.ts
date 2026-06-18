@@ -64,6 +64,11 @@ create table if not exists settings (
   key    text primary key,
   value  jsonb not null
 );
+create table if not exists redshift_cache (
+  key         text primary key,
+  fetched_at  timestamptz not null default now(),
+  payload     jsonb not null
+);
 `;
 
 // Admin principal: siempre activo y con rol admin (no se puede bloquear ni borrar).
@@ -301,4 +306,44 @@ export async function upsertMonthConfig(config: MonthConfig): Promise<MonthConfi
   // La selección de mentores es global: se guarda una sola vez para todos los meses.
   await setGlobalMentores(config.mentoresAplican);
   return config;
+}
+
+// ---- Caché compartida de Redshift (en Postgres, válida para todas las instancias) ----
+
+/** Devuelve el payload cacheado si no supera maxAgeMs; si no, null. */
+export async function getRedshiftCache(
+  key: string,
+  maxAgeMs: number
+): Promise<unknown | null> {
+  const pool = await db();
+  const res = await pool.query(
+    `select payload from redshift_cache
+       where key = $1 and fetched_at > now() - ($2::double precision * interval '1 millisecond')`,
+    [key, maxAgeMs]
+  );
+  return res.rows[0]?.payload ?? null;
+}
+
+/** Fecha/hora (ISO) en que se guardó por última vez la clave, o null. */
+export async function getRedshiftCacheFetchedAt(key: string): Promise<string | null> {
+  const pool = await db();
+  const res = await pool.query(
+    "select fetched_at from redshift_cache where key = $1",
+    [key]
+  );
+  const v = res.rows[0]?.fetched_at;
+  if (!v) return null;
+  return v instanceof Date ? v.toISOString() : String(v);
+}
+
+/** Guarda (o actualiza) el payload cacheado con la marca de tiempo actual. */
+export async function setRedshiftCache(key: string, payload: unknown): Promise<void> {
+  const pool = await db();
+  await pool.query(
+    `insert into redshift_cache (key, fetched_at, payload)
+       values ($1, now(), $2::jsonb)
+       on conflict (key) do update
+         set fetched_at = now(), payload = excluded.payload`,
+    [key, JSON.stringify(payload)]
+  );
 }

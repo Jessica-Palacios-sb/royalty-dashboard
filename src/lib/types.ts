@@ -78,4 +78,6 @@ export interface DashboardResponse {
   config: MonthConfig;
   rows: DashboardRow[];
   totals: DashboardTotals;
+  /** Fecha/hora (ISO) de la última actualización de datos desde Redshift. */
+  actualizadoEn?: string | null;
 }

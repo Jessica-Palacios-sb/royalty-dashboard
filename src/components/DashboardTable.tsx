@@ -45,6 +45,13 @@ export default function DashboardTable() {
   const t = data.totals;
   const comisionConfigurada = data.config.comisionTotal > 0;
   const maxPond = Math.max(0, ...data.rows.map((r) => r.pctTotal));
+  const actualizado = data.actualizadoEn
+    ? new Date(data.actualizadoEn).toLocaleString("es-CO", {
+        timeZone: "America/Bogota",
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : null;
 
   return (
     <div>
@@ -54,6 +61,11 @@ export default function DashboardTable() {
           <p className="text-sm text-slate-500">
             Participación por segmento y comisión asignada · {mesLabel(data.mes)}
           </p>
+          {actualizado && (
+            <p className="text-xs text-slate-400 mt-0.5">
+              Última actualización: {actualizado} · se actualiza a diario (7:00 a. m.)
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm text-slate-600">Mes:</label>

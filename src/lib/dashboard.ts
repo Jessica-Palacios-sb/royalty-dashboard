@@ -126,5 +126,13 @@ export async function getDashboard(mes: string): Promise<DashboardResponse> {
   const config = await effectiveConfig(mes, metrics);
   const { rows, totals } = buildDashboard(metrics, config);
   const mesesDisponibles = await getAvailableMonths();
-  return { mes, mesesDisponibles, config, rows, totals };
+
+  // Fecha de última actualización del snapshot (solo aplica con Redshift).
+  let actualizadoEn: string | null = null;
+  if ((process.env.DATA_SOURCE || "mock") === "redshift") {
+    const { getRedshiftCacheFetchedAt } = await import("./store");
+    actualizadoEn = await getRedshiftCacheFetchedAt(`metrics:${mes}`);
+  }
+
+  return { mes, mesesDisponibles, config, rows, totals, actualizadoEn };
 }

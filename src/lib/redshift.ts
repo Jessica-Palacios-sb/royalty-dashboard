@@ -121,21 +121,50 @@ select id_mentor, nombre_mentor, mes, fecha,
 from agrupacion group by 1,2,3,4
 `;
 
-interface CacheEntry {
-  expiresAt: number;
-  rows: MentorMetric[];
-}
-const cache = new Map<string, CacheEntry>();
-
+// El refresco real lo hace el cron diario (7 a.m. Colombia). Esta es solo una red
+// de seguridad: si el cron fallara, una lectura más vieja que esto vuelve a Redshift.
 function cacheMs(): number {
-  return Number(process.env.DASHBOARD_CACHE_MINUTES || 180) * 60 * 1000;
+  return Number(process.env.DASHBOARD_CACHE_MINUTES || 2880) * 60 * 1000; // 48 h
 }
 
-/** Métricas agregadas por mentor para un mes (YYYY-MM), con caché. */
-export async function queryRedshiftMetrics(mes: string): Promise<MentorMetric[]> {
-  const hit = cache.get(mes);
-  if (hit && hit.expiresAt > Date.now()) return hit.rows;
+function currentMonthKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
 
+function prevMonthKey(): string {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Refresca el snapshot desde Redshift (lo invoca el cron diario): vuelve a
+ * consultar la lista de meses y el mes actual + el anterior, y los guarda.
+ */
+export async function refreshRedshiftCache(): Promise<{ refreshed: string[] }> {
+  const { setRedshiftCache } = await import("./store");
+  const refreshed: string[] = [];
+
+  const pool = await getPool();
+  // Meses disponibles
+  const monthsSql = `select distinct to_char(mes, 'YYYY-MM') as mes from ( ${BASE_QUERY} ) base order by 1 desc`;
+  const monthsRes = await pool.query(monthsSql);
+  const months: string[] = monthsRes.rows.map((r: any) => r.mes);
+  await setRedshiftCache("months", months);
+  refreshed.push("months");
+
+  // Mes actual y anterior (los que cambian)
+  for (const mes of [currentMonthKey(), prevMonthKey()]) {
+    const rows = await fetchMetricsLive(mes);
+    await setRedshiftCache(`metrics:${mes}`, rows);
+    refreshed.push(mes);
+  }
+  return { refreshed };
+}
+
+/** Consulta en vivo (sin caché) las métricas de un mes. */
+async function fetchMetricsLive(mes: string): Promise<MentorMetric[]> {
   const pool = await getPool();
   const monthStart = `${mes}-01`;
   const sql = `
@@ -149,7 +178,7 @@ export async function queryRedshiftMetrics(mes: string): Promise<MentorMetric[]>
     where mes = cast($1 as date)
     group by id_mentor`;
   const res = await pool.query(sql, [monthStart]);
-  const rows: MentorMetric[] = res.rows.map((r: any) => ({
+  return res.rows.map((r: any) => ({
     idMentor: r.id_mentor,
     nombreMentor: r.nombre_mentor,
     mes,
@@ -158,14 +187,31 @@ export async function queryRedshiftMetrics(mes: string): Promise<MentorMetric[]>
     videos: Number(r.videos) || 0,
     bootcamp: Number(r.bootcamp) || 0,
   }));
-  cache.set(mes, { expiresAt: Date.now() + cacheMs(), rows });
+}
+
+/** Métricas por mentor de un mes (YYYY-MM). Lee el snapshot; si no existe o es
+ *  muy viejo (red de seguridad), consulta en vivo y lo guarda. */
+export async function queryRedshiftMetrics(mes: string): Promise<MentorMetric[]> {
+  const { getRedshiftCache, setRedshiftCache } = await import("./store");
+  const cacheKey = `metrics:${mes}`;
+  const cached = (await getRedshiftCache(cacheKey, cacheMs())) as MentorMetric[] | null;
+  if (cached) return cached;
+
+  const rows = await fetchMetricsLive(mes);
+  await setRedshiftCache(cacheKey, rows);
   return rows;
 }
 
-/** Meses con datos disponibles (YYYY-MM), ordenados desc. */
+/** Meses con datos disponibles (YYYY-MM), ordenados desc, con caché diaria. */
 export async function queryRedshiftMonths(): Promise<string[]> {
+  const { getRedshiftCache, setRedshiftCache } = await import("./store");
+  const cached = (await getRedshiftCache("months", cacheMs())) as string[] | null;
+  if (cached) return cached;
+
   const pool = await getPool();
   const sql = `select distinct to_char(mes, 'YYYY-MM') as mes from ( ${BASE_QUERY} ) base order by 1 desc`;
   const res = await pool.query(sql);
-  return res.rows.map((r: any) => r.mes);
+  const months: string[] = res.rows.map((r: any) => r.mes);
+  await setRedshiftCache("months", months);
+  return months;
 }
